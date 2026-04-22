@@ -1,4 +1,5 @@
 import type { AccessEvent, CameraConfig, Resident, StaySession } from './types'
+import { APP_CONFIG } from './config/appConfig'
 
 const KEYS = {
   residents: 'parking:residents',
@@ -32,17 +33,6 @@ export const storage = {
   setSessions: (items: StaySession[]) => write(KEYS.sessions, items),
 
   getCameras: () =>
-    read<CameraConfig[]>(KEYS.cameras, [
-      { gate: 'entry', type: 'IP RTSP', name: 'Giris Kamera 1', url: '', username: '', password: '' },
-      { gate: 'exit', type: 'IP RTSP', name: 'Cikis Kamera 1', url: '', username: '', password: '' },
-    ]),
+    read<CameraConfig[]>(KEYS.cameras, APP_CONFIG.defaults.cameras),
   setCameras: (items: CameraConfig[]) => write(KEYS.cameras, items),
-}
-
-export function uid(prefix: string) {
-  return `${prefix}-${Math.random().toString(36).slice(2, 10)}-${Date.now()}`
-}
-
-export function normalizePlate(plate: string) {
-  return plate.toUpperCase().replaceAll(' ', '').trim()
 }

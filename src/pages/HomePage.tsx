@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { normalizePlate, storage, uid } from '../storage'
+import { storage } from '../storage'
 import type { AccessEvent, GateType, Resident, StaySession } from '../types'
+import { APP_CONFIG } from '../config/appConfig'
+import { createAccessEvent, processPlateRecognition } from '../services/accessControlService'
+import { uid } from '../lib/domainUtils'
 
 type BarrierState = 'idle' | 'opening' | 'closing'
 type CountTrend = 'steady' | 'up' | 'down'
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleString('tr-TR')
+  return new Date(iso).toLocaleString(APP_CONFIG.ui.dateLocale)
 }
 
 export function HomePage() {
@@ -27,7 +30,7 @@ export function HomePage() {
   )
 
   const recentEvents = useMemo(
-    () => [...events].sort((a, b) => +new Date(b.time) - +new Date(a.time)).slice(0, 10),
+    () => [...events].sort((a, b) => +new Date(b.time) - +new Date(a.time)).slice(0, APP_CONFIG.ui.recentEventsLimit),
     [events],
   )
 
@@ -59,22 +62,13 @@ export function HomePage() {
   function triggerBarrierAnimation() {
     setBarrierState('opening')
     // Daha gerçekçi akış: açılma ve kapanma daha yavaş ilerler.
-    const closingTimer = window.setTimeout(() => setBarrierState('closing'), 3800)
-    const idleTimer = window.setTimeout(() => setBarrierState('idle'), 7600)
+    const closingTimer = window.setTimeout(() => setBarrierState('closing'), APP_CONFIG.barrier.openingToClosingMs)
+    const idleTimer = window.setTimeout(() => setBarrierState('idle'), APP_CONFIG.barrier.resetToIdleMs)
     setBarrierTimers(closingTimer, idleTimer)
   }
 
   function addEvent(gate: GateType, resident: Resident | undefined, plate: string, barrierOpened: boolean, note: string) {
-    const event: AccessEvent = {
-      id: uid('event'),
-      residentId: resident?.id ?? null,
-      plate,
-      residentName: resident ? `${resident.name} ${resident.surname}` : 'Kayıtsız Araç',
-      gate,
-      time: new Date().toISOString(),
-      barrierOpened,
-      note,
-    }
+    const event = createAccessEvent({ gate, resident, plate, barrierOpened, note, createId: uid })
     setEvents((prev) => {
       const next = [event, ...prev]
       storage.setEvents(next)
@@ -94,7 +88,7 @@ export function HomePage() {
     }
     setBarrierState('opening')
     addEvent('entry', undefined, '-', true, 'Bariyer manuel olarak açıldı')
-    const idleTimer = window.setTimeout(() => setBarrierState('idle'), 3000)
+    const idleTimer = window.setTimeout(() => setBarrierState('idle'), APP_CONFIG.barrier.manualResetToIdleMs)
     setBarrierTimers(idleTimer)
     setStatusMessage('Manuel açma komutu gönderildi.')
   }
@@ -106,74 +100,33 @@ export function HomePage() {
     }
     setBarrierState('closing')
     addEvent('exit', undefined, '-', true, 'Bariyer manuel olarak kapatıldı')
-    const idleTimer = window.setTimeout(() => setBarrierState('idle'), 3000)
+    const idleTimer = window.setTimeout(() => setBarrierState('idle'), APP_CONFIG.barrier.manualResetToIdleMs)
     setBarrierTimers(idleTimer)
     setStatusMessage('Manuel kapatma komutu gönderildi.')
   }
 
   function processRecognition(gate: GateType, rawPlate: string) {
-    if (barrierState !== 'idle') {
-      setStatusMessage('Bariyer şu anda meşgul, işlem tamamlandıktan sonra tekrar deneyin.')
-      return
+    const result = processPlateRecognition({
+      gate,
+      rawPlate,
+      residents,
+      sessions,
+      barrierState,
+      createId: uid,
+    })
+    saveSessions(result.nextSessions)
+    const latestEvent = result.event
+    if (latestEvent) {
+      setEvents((prev) => {
+        const next = [latestEvent, ...prev]
+        storage.setEvents(next)
+        return next
+      })
     }
-    const plate = normalizePlate(rawPlate)
-    if (!plate) {
-      setStatusMessage('Lütfen geçerli bir plaka girin.')
-      return
-    }
-
-    const resident = residents.find((r) => normalizePlate(r.plate) === plate)
-    if (!resident) {
-      addEvent(gate, undefined, plate, false, 'Kayıt bulunamadı, bariyer açılmadı')
-      setStatusMessage('Plaka kayıtlı değil.')
-      return
-    }
-
-    if (gate === 'entry') {
-      const active = sessions.find((s) => s.residentId === resident.id && !s.exitTime)
-      if (active) {
-        addEvent(gate, resident, plate, false, 'Araç zaten içeride gözüküyor')
-        setStatusMessage('Bu araç zaten içeride.')
-        return
-      }
-      const nextSessions = [
-        {
-          id: uid('session'),
-          residentId: resident.id,
-          plate,
-          residentName: `${resident.name} ${resident.surname}`,
-          entryTime: new Date().toISOString(),
-        },
-        ...sessions,
-      ]
-      saveSessions(nextSessions)
-      addEvent(gate, resident, plate, true, 'Plaka tanındı, bariyer açma sinyali gönderildi')
+    if (result.shouldAnimateBarrier) {
       triggerBarrierAnimation()
-      setStatusMessage('Giriş işlemi başarılı.')
-      return
     }
-
-    const activeSessionIndex = sessions.findIndex((s) => s.residentId === resident.id && !s.exitTime)
-    if (activeSessionIndex === -1) {
-      addEvent(gate, resident, plate, false, 'Açık giriş kaydı bulunamadı')
-      setStatusMessage('Araç için açık giriş kaydı bulunamadı.')
-      return
-    }
-
-    const now = new Date()
-    const nextSessions = [...sessions]
-    const activeSession = nextSessions[activeSessionIndex]
-    const entryMs = +new Date(activeSession.entryTime)
-    const durationMinutes = Math.max(1, Math.round((+now - entryMs) / 60000))
-    nextSessions[activeSessionIndex] = {
-      ...activeSession,
-      exitTime: now.toISOString(),
-      durationMinutes,
-    }
-    saveSessions(nextSessions)
-    addEvent(gate, resident, plate, true, `Çıkış kaydedildi, içeride kalma: ${durationMinutes} dk`)
-    triggerBarrierAnimation()
-    setStatusMessage('Çıkış işlemi başarılı.')
+    setStatusMessage(result.statusMessage)
   }
 
   const barrierStatusText =
