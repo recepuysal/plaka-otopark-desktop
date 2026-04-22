@@ -9,12 +9,20 @@ function createWindow() {
   const preloadMjs = path.join(__dirname, '../preload/index.mjs')
   const preloadJs = path.join(__dirname, '../preload/index.js')
   const preloadPath = existsSync(preloadMjs) ? preloadMjs : preloadJs
+  const devIconPath = path.join(__dirname, '../../build/icon.png')
+  const bundledIconPath = path.join(process.resourcesPath, 'icon.png')
+  const iconPath = existsSync(devIconPath)
+    ? devIconPath
+    : existsSync(bundledIconPath)
+      ? bundledIconPath
+      : undefined
 
   const win = new BrowserWindow({
     width: 1400,
     height: 900,
     minWidth: 1200,
     minHeight: 760,
+    icon: iconPath,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

@@ -3,13 +3,15 @@
   "appId": "YourAppID",
   "asar": true,
   "directories": {
-    "output": "release/${version}"
+    "output": "release/${version}",
+    "buildResources": "build"
   },
   "files": [
     "dist-electron",
     "dist"
   ],
   "mac": {
+    "icon": "build/icon.png",
     "artifactName": "${productName}_${version}.${ext}",
     "target": [
       "dmg",
@@ -17,6 +19,7 @@
     ]
   },
   "win": {
+    "icon": "build/icon.ico",
     "target": [
       {
         "target": "nsis",
