@@ -2,6 +2,7 @@ import { NavLink, Route, Routes } from 'react-router-dom'
 import { HomePage } from './pages/HomePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { CamerasPage } from './pages/CamerasPage'
+import { APP_VERSION } from './generated/appVersion'
 
 export default function App() {
   return (
@@ -10,6 +11,7 @@ export default function App() {
         <div>
           <h1>Plaka Otopark</h1>
           <p>Site araç giriş-çıkış yönetimi</p>
+          <small className="app-version">{APP_VERSION}</small>
         </div>
         <nav>
           <NavLink to="/" end>

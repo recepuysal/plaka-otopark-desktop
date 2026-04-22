@@ -13,10 +13,13 @@
   },
   "type": "module",
   "scripts": {
+    "version:bump": "node scripts/bump-version.mjs",
+    "predev": "npm run version:bump",
+    "prebuild": "npm run version:bump",
+    "pretest": "npm run version:bump && vite build --mode=test",
     "dev": "vite",
     "build": "tsc && vite build && electron-builder",
     "preview": "vite preview",
-    "pretest": "vite build --mode=test",
     "test": "vitest run"
   },
   "dependencies": {
