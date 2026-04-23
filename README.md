@@ -12,16 +12,59 @@ Türkiye plaka tanıma (**Tesseract.js**), çift hat giriş/çıkış, kayıtlı
 
 ## Bu sürümde neler var?
 
-Bu sürümde özellikle **kayıt yönetimi** ekranı güçlendirilmiştir:
+Bu sürümde özellikle **kayıt yönetimi**, **tema yönetimi** ve genel **UI/UX tutarlılığı** güçlendirilmiştir:
 
 - İsim, plaka ve telefon için **anlık akıllı arama**
 - Aramada en yakın sonucun öne gelmesi (**best match** vurgusu)
 - Arama alanında **blok** ve **daire** filtreleri
-- Her kayıt satırında `...` menüsü ile **Düzenle / Sil**
+- Her kayıt satırında `...` menüsü ile **Düzenle / Bilgi / Sil**
 - Tema uyumlu, güvenli **silme onay popup** (sistem popup yerine özel modal)
-- `Düzenle` tıklanınca formun otomatik doldurulması ve aynı formdan güncelleme
-- Düzenleme modunda görsel durum (başlık, buton, kart vurgusu)
+- `Düzenle` tıklanınca formun otomatik doldurulması ve aynı popup üzerinden güncelleme
+- Yeni eklenen kayıtların satırda vurgulanması (`Yeni` rozeti) ve ilk tıklamada hızlı düzenleme
+- Bilgi popup içinde son 5 oturumun sabit satırlı, taşmasız ve sade gösterimi
+- **Sistem / Açık / Koyu** tema desteği ve kullanıcı tercihinin kalıcı saklanması
+- Açık tema kontrast iyileştirmeleri + koyu temada katman ayrımı güçlendirmeleri
 - Sürüm numarası ve ikon üretimi için otomasyon iyileştirmeleri
+
+---
+
+## Son güncelleme detayları (UI revizyonu)
+
+### 1) Tema sistemi (yeni)
+
+- Üst barda tema seçici eklendi: `Sistem`, `Açık`, `Koyu`.
+- `Sistem` seçiliyken işletim sisteminin tema tercihi otomatik takip edilir.
+- Kullanıcı manuel seçim yaparsa tercih `localStorage` içinde saklanır.
+- Açık tema için metin/zemin/kenarlık kontrastları artırıldı.
+- Koyu tema için kart, panel ve modal katman ayrımı güçlendirildi.
+
+### 2) Kayıt ekranı (yeniden tasarım)
+
+- Sayfa artık liste odaklıdır; yeni kayıt formu popup modal’a taşınmıştır.
+- Üst sağ aksiyonlar:
+  - `Yeni Kayıt Ekle`
+  - `Excel ile Ekle`
+- Düzenleme işlemi de aynı popup üzerinden yürütülür (tek akış).
+- İptal edildiğinde gereksiz durum mesajları kaldırılmıştır.
+
+### 3) Bilgi popup (sadeleştirme + stabilite)
+
+- Bilgi panelinde her satır bir **giriş-çıkış oturumu** olacak şekilde düzenlendi.
+- Son 5 oturum sabit satır düzeninde gösterilir.
+- Taşma/kayma yapan metinler için kırpma ve hizalama düzeni eklendi.
+- Durum satırı (İçeride / Dışarıda) karşılıklı hizalanacak şekilde konumlandırıldı.
+
+### 4) Excel içe aktarma (geliştirme)
+
+- Farklı kolon isimleri için geniş eşleme desteği eklendi (TR/EN ve ikincil varyasyonlar).
+- Geçersiz veya çakışan satırlar atlanır; başarılı/atlanan sayısı kullanıcıya bildirilir.
+- Örnek test dosyası eklendi: `sample-data/ornek-kayitlar-5.xlsx`.
+
+### 5) Sayfa kayması ve görsel tutarlılık düzeltmeleri
+
+- Anasayfa durum mesajı için sabit alan ayrıldı (`Giriş işlemi başarılı` gibi mesajlarda layout kaymaz).
+- Modal, menü, kart ve form stilleri tek tasarım diline çekildi.
+- Focus/hover/disabled durumları tüm ekranlarda tutarlı hale getirildi.
 
 ---
 
@@ -86,7 +129,8 @@ Geliştirme sırasında Vite sunucusu genellikle `http://localhost:5173/` adresi
 
 ### 1) Yeni kayıt ekleme
 
-- `Ad`, `Soyad`, `Telefon`, `Plaka`, `Blok No`, `Daire No` ve opsiyonel `Not` girilir.
+- Üst sağdaki `Yeni Kayıt Ekle` butonuna tıklanır.
+- Açılan popup formunda `Ad`, `Soyad`, `Telefon`, `Plaka`, `Blok No`, `Daire No` ve opsiyonel `Not` girilir.
 - `Kaydet` ile kayıt eklenir.
 
 ### 2) Akıllı arama
@@ -103,11 +147,16 @@ Geliştirme sırasında Vite sunucusu genellikle `http://localhost:5173/` adresi
 ### 4) Kayıt düzenleme
 
 - İlgili satırdaki `...` menüsünden `Düzenle` seçilir.
-- Form, seçilen kişinin bilgileriyle otomatik dolar.
+- Düzenleme popup’ı seçilen kişinin bilgileriyle otomatik dolar.
 - Başlık `Kaydı Düzenle`, buton `Güncelle` olur.
 - İşlemden vazgeçmek için `İptal` kullanılabilir.
 
-### 5) Kayıt silme
+### 5) Kayıt bilgi görünümü
+
+- İlgili satırdaki `...` menüsünden `Bilgi` seçilir.
+- Kişinin son 5 giriş-çıkış oturumu ve içeride kalma durumu görüntülenir.
+
+### 6) Kayıt silme
 
 - İlgili satırdaki `...` menüsünden `Sil` seçilir.
 - Özel onay penceresinde `Evet, Sil` ile kalıcı silme yapılır.
