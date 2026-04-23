@@ -26,7 +26,8 @@
   "dependencies": {
     "electron-updater": "^6.3.9",
     "react-router-dom": "^7.14.0",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.48.2",

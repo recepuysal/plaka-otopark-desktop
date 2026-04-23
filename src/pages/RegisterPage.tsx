@@ -1,6 +1,7 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { storage } from '../storage'
-import type { Resident } from '../types'
+import type { Resident, StaySession } from '../types'
 import { normalizePlate, uid } from '../lib/domainUtils'
 
 const initialForm = {
@@ -25,6 +26,136 @@ const mockResidentTemplates = [
   { name: 'Murat', surname: 'Özdemir', phone: '05320000009', plate: '34 ABC 109', blockNo: 'C', apartmentNo: '9', note: 'Sahte kayıt' },
   { name: 'Canan', surname: 'Taş', phone: '05320000010', plate: '34 ABC 110', blockNo: 'D', apartmentNo: '10', note: 'Sahte kayıt' },
 ]
+
+type ResidentForm = typeof initialForm
+
+function normalizeHeader(value: unknown) {
+  return String(value ?? '')
+    .toLocaleLowerCase('tr-TR')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '')
+}
+
+function getCell(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const normalizedKey = normalizeHeader(key)
+    for (const [column, value] of Object.entries(row)) {
+      if (normalizeHeader(column) === normalizedKey) {
+        return String(value ?? '').trim()
+      }
+    }
+  }
+  return ''
+}
+
+function mapExcelRowToForm(row: Record<string, unknown>): ResidentForm {
+  return {
+    name: getCell(row, [
+      'ad',
+      'isim',
+      'name',
+      'first name',
+      'firstname',
+      'given name',
+      'givenname',
+      'personel ad',
+      'kisi adi',
+      'kisiad',
+      'adiniz',
+    ]),
+    surname: getCell(row, [
+      'soyad',
+      'surname',
+      'last name',
+      'lastname',
+      'family name',
+      'familyname',
+      'kisi soyadi',
+      'kisisoyad',
+      'soyadiniz',
+    ]),
+    phone: getCell(row, [
+      'telefon',
+      'phone',
+      'gsm',
+      'cep',
+      'cep telefonu',
+      'ceptelefonu',
+      'mobile',
+      'mobile phone',
+      'mobilephone',
+      'tel',
+      'telefon no',
+      'telefonno',
+      'phone number',
+      'phonenumber',
+      'iletisim',
+      'iletisim no',
+      'iletisimno',
+    ]),
+    plate: getCell(row, [
+      'plaka',
+      'plate',
+      'plate no',
+      'plateno',
+      'plate number',
+      'platenumber',
+      'arac plaka',
+      'aracplaka',
+      'vehicle plate',
+      'vehicleplate',
+      'arac plaka no',
+      'aracplakano',
+    ]),
+    blockNo: getCell(row, [
+      'blok',
+      'blokno',
+      'blok no',
+      'block',
+      'blockno',
+      'block no',
+      'bina',
+      'building',
+      'building block',
+      'buildingblock',
+      'site blok',
+      'siteblok',
+    ]),
+    apartmentNo: getCell(row, [
+      'daire',
+      'daireno',
+      'daire no',
+      'apartment',
+      'apartmentno',
+      'apartment no',
+      'unit',
+      'unit no',
+      'unitno',
+      'daire numarasi',
+      'dairenumarasi',
+      'flat',
+      'flat no',
+      'flatno',
+    ]),
+    note: getCell(row, [
+      'not',
+      'aciklama',
+      'açıklama',
+      'note',
+      'notes',
+      'description',
+      'desc',
+      'ek not',
+      'eknot',
+      'yorum',
+      'comment',
+      'comments',
+      'aciklama notu',
+      'aciklamanotu',
+    ]),
+  }
+}
 
 const legacyNameFixMap: Record<string, string> = {
   Ayse: 'Ayşe',
@@ -104,6 +235,16 @@ function rankResidentsByQuery(residents: Resident[], query: string) {
     .map((item) => item.resident)
 }
 
+function formatDateShort(iso: string) {
+  return new Date(iso).toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function RegisterPage() {
   const SHOW_MOCK_BUTTON = false
   const [residents, setResidents] = useState<Resident[]>(storage.getResidents())
@@ -114,7 +255,12 @@ export function RegisterPage() {
   const [selectedApartmentFilter, setSelectedApartmentFilter] = useState('')
   const [openMenuResidentId, setOpenMenuResidentId] = useState<string | null>(null)
   const [pendingDeleteResidentId, setPendingDeleteResidentId] = useState<string | null>(null)
+  const [infoResidentId, setInfoResidentId] = useState<string | null>(null)
   const [editingResidentId, setEditingResidentId] = useState<string | null>(null)
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false)
+  const [newlyAddedResidentIds, setNewlyAddedResidentIds] = useState<string[]>([])
+  const [sessions, setSessions] = useState<StaySession[]>(storage.getSessions())
+  const excelInputRef = useRef<HTMLInputElement | null>(null)
 
   const filteredResidents = useMemo(() => {
     const rankedResidents = rankResidentsByQuery(residents, searchQuery)
@@ -144,6 +290,40 @@ export function RegisterPage() {
       ),
     [residents],
   )
+  const selectedResident = useMemo(
+    () => residents.find((resident) => resident.id === infoResidentId) ?? null,
+    [residents, infoResidentId],
+  )
+  const residentRecentSessions = useMemo(
+    () =>
+      [...sessions]
+        .filter((session) => session.residentId === infoResidentId)
+        .sort((a, b) => {
+          const aTime = a.exitTime ?? a.entryTime
+          const bTime = b.exitTime ?? b.entryTime
+          return +new Date(bTime) - +new Date(aTime)
+        })
+        .slice(0, 5),
+    [sessions, infoResidentId],
+  )
+  const recentSessionRows = useMemo(
+    () => Array.from({ length: 5 }, (_, index) => residentRecentSessions[index] ?? null),
+    [residentRecentSessions],
+  )
+  const activeStaySession = useMemo(
+    () =>
+      [...sessions]
+        .filter((session) => session.residentId === infoResidentId && !session.exitTime)
+        .sort((a, b) => +new Date(b.entryTime) - +new Date(a.entryTime))[0],
+    [sessions, infoResidentId],
+  )
+  const latestClosedSession = useMemo(
+    () =>
+      [...sessions]
+        .filter((session) => session.residentId === infoResidentId && session.exitTime)
+        .sort((a, b) => +new Date((b.exitTime as string) ?? b.entryTime) - +new Date((a.exitTime as string) ?? a.entryTime))[0],
+    [sessions, infoResidentId],
+  )
 
   useEffect(() => {
     const { fixed, changed } = fixLegacyMockResidentNames(residents)
@@ -154,28 +334,34 @@ export function RegisterPage() {
     storage.setResidents(fixed)
   }, [residents])
 
+  function createResidentFromForm(data: ResidentForm) {
+    const phone = data.phone.replace(/\D/g, '')
+    const plate = normalizePlate(data.plate)
+    const fullName = `${data.name.trim()} ${data.surname.trim()}`.trim()
+
+    if (fullName.length < 3) return null
+    if (phone.length < 10 || phone.length > 11) return null
+    if (!plate || plate.length < 5) return null
+
+    return {
+      name: data.name.trim(),
+      surname: data.surname.trim(),
+      phone,
+      plate,
+      blockNo: data.blockNo.trim(),
+      apartmentNo: data.apartmentNo.trim(),
+      note: data.note.trim(),
+    }
+  }
+
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const phone = form.phone.replace(/\D/g, '')
-    const plate = normalizePlate(form.plate)
-    const fullName = `${form.name.trim()} ${form.surname.trim()}`.trim()
-    if (fullName.length < 3) {
-      setMessage('Ad ve soyad bilgisi geçerli olmalıdır.')
+    const mapped = createResidentFromForm(form)
+    if (!mapped) {
+      setMessage('Form bilgileri geçersiz. Ad, telefon ve plaka alanlarını kontrol edin.')
       return
     }
-    if (phone.length < 10 || phone.length > 11) {
-      setMessage('Telefon numarası 10 veya 11 haneli olmalıdır.')
-      return
-    }
-    if (!plate) {
-      setMessage('Plaka zorunludur.')
-      return
-    }
-    if (plate.length < 5) {
-      setMessage('Plaka formatı geçersiz görünüyor.')
-      return
-    }
-    if (residents.some((resident) => normalizePlate(resident.plate) === plate && resident.id !== editingResidentId)) {
+    if (residents.some((resident) => normalizePlate(resident.plate) === mapped.plate && resident.id !== editingResidentId)) {
       setMessage('Bu plaka zaten kayıtlı.')
       return
     }
@@ -184,13 +370,7 @@ export function RegisterPage() {
         resident.id === editingResidentId
           ? {
               ...resident,
-              name: form.name.trim(),
-              surname: form.surname.trim(),
-              phone,
-              plate,
-              blockNo: form.blockNo.trim(),
-              apartmentNo: form.apartmentNo.trim(),
-              note: form.note.trim(),
+              ...mapped,
             }
           : resident,
       )
@@ -198,26 +378,96 @@ export function RegisterPage() {
       storage.setResidents(next)
       setForm(initialForm)
       setEditingResidentId(null)
+      setIsFormModalOpen(false)
+      setNewlyAddedResidentIds((prev) => prev.filter((id) => id !== editingResidentId))
       setMessage('Kayıt güncellendi.')
       return
     }
 
     const record: Resident = {
       id: uid('resident'),
-      name: form.name.trim(),
-      surname: form.surname.trim(),
-      phone,
-      plate,
-      blockNo: form.blockNo.trim(),
-      apartmentNo: form.apartmentNo.trim(),
-      note: form.note.trim(),
+      ...mapped,
       createdAt: new Date().toISOString(),
     }
     const next = [record, ...residents]
     setResidents(next)
     storage.setResidents(next)
+    setNewlyAddedResidentIds((prev) => [record.id, ...prev])
+    setSearchQuery('')
+    setSelectedBlockFilter('')
+    setSelectedApartmentFilter('')
+    setIsFormModalOpen(false)
     setForm(initialForm)
     setMessage('Kayıt başarıyla eklendi.')
+  }
+
+  function triggerExcelImport() {
+    excelInputRef.current?.click()
+  }
+
+  async function onExcelFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+
+    try {
+      const buffer = await file.arrayBuffer()
+      const workbook = XLSX.read(buffer, { type: 'array' })
+      const firstSheetName = workbook.SheetNames[0]
+      if (!firstSheetName) {
+        setMessage('Excel dosyasında sayfa bulunamadı.')
+        return
+      }
+
+      const worksheet = workbook.Sheets[firstSheetName]
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' })
+      if (rows.length === 0) {
+        setMessage('Excel dosyası boş görünüyor.')
+        return
+      }
+
+      const existingPlateSet = new Set(residents.map((resident) => normalizePlate(resident.plate)))
+      const importedResidents: Resident[] = []
+      let skippedCount = 0
+
+      for (const row of rows) {
+        const formData = mapExcelRowToForm(row)
+        const mapped = createResidentFromForm(formData)
+        if (!mapped) {
+          skippedCount += 1
+          continue
+        }
+        if (existingPlateSet.has(mapped.plate)) {
+          skippedCount += 1
+          continue
+        }
+
+        existingPlateSet.add(mapped.plate)
+        importedResidents.push({
+          id: uid('resident'),
+          ...mapped,
+          createdAt: new Date().toISOString(),
+        })
+      }
+
+      if (importedResidents.length === 0) {
+        setMessage('Excelden geçerli yeni kayıt bulunamadı.')
+        return
+      }
+
+      const next = [...importedResidents, ...residents]
+      setResidents(next)
+      storage.setResidents(next)
+      setNewlyAddedResidentIds((prev) => [...importedResidents.map((resident) => resident.id), ...prev])
+      setSearchQuery('')
+      setSelectedBlockFilter('')
+      setSelectedApartmentFilter('')
+      setMessage(`Excelden ${importedResidents.length} kayıt eklendi. Atlanan satır: ${skippedCount}.`)
+    } catch {
+      setMessage('Excel okunurken bir hata oluştu. Dosya formatını kontrol edin.')
+    }
   }
 
   function addMockResidents() {
@@ -251,6 +501,10 @@ export function RegisterPage() {
     const next = [...mockResidents, ...residents]
     setResidents(next)
     storage.setResidents(next)
+    setNewlyAddedResidentIds((prev) => [...mockResidents.map((resident) => resident.id), ...prev])
+    setSearchQuery('')
+    setSelectedBlockFilter('')
+    setSelectedApartmentFilter('')
     setMessage(`${mockResidents.length} adet sahte kayıt eklendi.`)
   }
 
@@ -258,6 +512,7 @@ export function RegisterPage() {
     const next = residents.filter((resident) => resident.id !== residentId)
     setResidents(next)
     storage.setResidents(next)
+    setNewlyAddedResidentIds((prev) => prev.filter((id) => id !== residentId))
     if (editingResidentId === residentId) {
       setEditingResidentId(null)
       setForm(initialForm)
@@ -271,6 +526,12 @@ export function RegisterPage() {
     setOpenMenuResidentId((prev) => (prev === residentId ? null : residentId))
   }
 
+  function openResidentInfo(residentId: string) {
+    setSessions(storage.getSessions())
+    setInfoResidentId(residentId)
+    setOpenMenuResidentId(null)
+  }
+
   function startEditingResident(resident: Resident) {
     setForm({
       name: resident.name,
@@ -282,14 +543,31 @@ export function RegisterPage() {
       note: resident.note,
     })
     setEditingResidentId(resident.id)
+    setIsFormModalOpen(true)
     setOpenMenuResidentId(null)
     setMessage('Düzenleme modu aktif. Değişiklikten sonra güncelleyin.')
+  }
+
+  function openCreateModal() {
+    setEditingResidentId(null)
+    setForm(initialForm)
+    setIsFormModalOpen(true)
+    setMessage('')
+  }
+
+  function handleResidentRowClick(resident: Resident) {
+    if (!newlyAddedResidentIds.includes(resident.id)) {
+      return
+    }
+    setNewlyAddedResidentIds((prev) => prev.filter((id) => id !== resident.id))
+    startEditingResident(resident)
   }
 
   function cancelEditing() {
     setEditingResidentId(null)
     setForm(initialForm)
-    setMessage('Düzenleme iptal edildi.')
+    setIsFormModalOpen(false)
+    setMessage('')
   }
 
   return (
@@ -299,98 +577,33 @@ export function RegisterPage() {
           <h2>Kayıt Sayfası</h2>
           <p>Ad, soyad, telefon, plaka, blok, daire ve not bilgilerinin sisteme kaydı</p>
         </div>
+        <div className="header-actions">
+          <button type="button" className="ghost-btn" onClick={openCreateModal}>
+            Yeni Kayıt Ekle
+          </button>
+          <button type="button" className="excel-import-btn" onClick={triggerExcelImport}>
+            <span className="excel-import-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M14 3h-7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+                <path d="M14 3v5h5" />
+                <path d="m9 12 2 3m0-3-2 3m4-3v3" />
+              </svg>
+            </span>
+            Excel ile Ekle
+          </button>
+        </div>
       </header>
+      <input
+        ref={excelInputRef}
+        type="file"
+        accept=".xlsx,.xls"
+        className="hidden-input"
+        onChange={onExcelFileSelected}
+      />
 
-      <div className="two-col">
-        <form
-          className={`card form-grid register-form-card ${editingResidentId ? 'editing-mode' : ''}`}
-          onSubmit={onSubmit}
-        >
-          <h3>{editingResidentId ? 'Kaydı Düzenle' : 'Yeni Kayıt'}</h3>
-          {editingResidentId && <p className="editing-mode-badge">Duzenleme modu aktif</p>}
-          <div className="register-grid">
-            <label>
-              Ad
-              <input
-                placeholder="Örn: Ahmet"
-                value={form.name}
-                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Soyad
-              <input
-                placeholder="Örn: Yılmaz"
-                value={form.surname}
-                onChange={(event) => setForm((prev) => ({ ...prev, surname: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Telefon
-              <input
-                placeholder="Örn: 05xxxxxxxxx"
-                value={form.phone}
-                onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-                inputMode="numeric"
-                maxLength={11}
-                required
-              />
-            </label>
-            <label>
-              Plaka
-              <input
-                placeholder="Örn: 34 ABC 123"
-                value={form.plate}
-                onChange={(event) => setForm((prev) => ({ ...prev, plate: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Blok No
-              <input
-                placeholder="Örn: A"
-                value={form.blockNo}
-                onChange={(event) => setForm((prev) => ({ ...prev, blockNo: event.target.value }))}
-                required
-              />
-            </label>
-            <label>
-              Daire No
-              <input
-                placeholder="Örn: 12"
-                value={form.apartmentNo}
-                onChange={(event) => setForm((prev) => ({ ...prev, apartmentNo: event.target.value }))}
-                required
-              />
-            </label>
-          </div>
-          <label>
-            Not
-            <textarea
-              placeholder="Ek açıklama (opsiyonel)"
-              value={form.note}
-              onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
-              rows={3}
-            />
-          </label>
-          <button type="submit">{editingResidentId ? 'Güncelle' : 'Kaydet'}</button>
-          {editingResidentId && (
-            <button type="button" className="ghost-btn" onClick={cancelEditing}>
-              İptal
-            </button>
-          )}
-          {SHOW_MOCK_BUTTON && (
-            <button type="button" onClick={addMockResidents}>
-              10 Sahte Kayıt Ekle
-            </button>
-          )}
-          <p className="message message-slot">{message || '\u00A0'}</p>
-        </form>
-
-        <section className="card">
+      <section className="card">
           <h3>Kayıtlı Kişiler ({filteredResidents.length}/{residents.length})</h3>
+          <p className="message message-slot">{message || '\u00A0'}</p>
           <div className="search-toolbar">
             <div className="search-input-wrap">
               <span className="search-icon" aria-hidden="true">
@@ -445,11 +658,18 @@ export function RegisterPage() {
             </thead>
             <tbody>
               {filteredResidents.map((resident) => (
-                <tr key={resident.id} className={resident.id === bestMatchResidentId ? 'best-match-row' : ''}>
+                <tr
+                  key={resident.id}
+                  className={`${resident.id === bestMatchResidentId ? 'best-match-row' : ''} ${newlyAddedResidentIds.includes(resident.id) ? 'new-resident-row' : ''}`}
+                  onClick={() => handleResidentRowClick(resident)}
+                >
                   <td>
                     {resident.name} {resident.surname}
                     {resident.id === bestMatchResidentId && hasActiveSearch && (
                       <span className="best-match-badge">En iyi eslesme</span>
+                    )}
+                    {newlyAddedResidentIds.includes(resident.id) && (
+                      <span className="new-resident-badge">Yeni</span>
                     )}
                   </td>
                   <td>{resident.phone}</td>
@@ -461,20 +681,41 @@ export function RegisterPage() {
                     <button
                       type="button"
                       className="row-menu-trigger"
-                      onClick={() => toggleResidentMenu(resident.id)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        toggleResidentMenu(resident.id)
+                      }}
                       aria-label="Kayıt işlemleri"
                     >
                       ...
                     </button>
                     {openMenuResidentId === resident.id && (
                       <div className="row-menu-popup">
-                        <button type="button" className="row-menu-item" onClick={() => startEditingResident(resident)}>
+                        <button
+                          type="button"
+                          className="row-menu-item"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            startEditingResident(resident)
+                          }}
+                        >
                           Düzenle
                         </button>
                         <button
                           type="button"
+                          className="row-menu-item"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openResidentInfo(resident.id)
+                          }}
+                        >
+                          Bilgi
+                        </button>
+                        <button
+                          type="button"
                           className="row-menu-item danger-btn"
-                          onClick={() => {
+                          onClick={(event) => {
+                            event.stopPropagation()
                             setPendingDeleteResidentId(resident.id)
                             setOpenMenuResidentId(null)
                           }}
@@ -498,8 +739,101 @@ export function RegisterPage() {
               )}
             </tbody>
           </table>
-        </section>
-      </div>
+      </section>
+      {isFormModalOpen && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Kayıt formu">
+          <form
+            className={`confirm-modal register-modal form-grid ${editingResidentId ? 'editing-mode' : ''}`}
+            onSubmit={onSubmit}
+          >
+            <div className="modal-header-row">
+              <h4>{editingResidentId ? 'Kaydı Düzenle' : 'Yeni Kayıt'}</h4>
+              <button type="button" className="row-menu-trigger" onClick={cancelEditing} aria-label="Formu kapat">
+                ×
+              </button>
+            </div>
+            {editingResidentId && <p className="editing-mode-badge">Duzenleme modu aktif</p>}
+            <div className="register-grid">
+              <label>
+                Ad
+                <input
+                  placeholder="Örn: Ahmet"
+                  value={form.name}
+                  onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Soyad
+                <input
+                  placeholder="Örn: Yılmaz"
+                  value={form.surname}
+                  onChange={(event) => setForm((prev) => ({ ...prev, surname: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Telefon
+                <input
+                  placeholder="Örn: 05xxxxxxxxx"
+                  value={form.phone}
+                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                  inputMode="numeric"
+                  maxLength={11}
+                  required
+                />
+              </label>
+              <label>
+                Plaka
+                <input
+                  placeholder="Örn: 34 ABC 123"
+                  value={form.plate}
+                  onChange={(event) => setForm((prev) => ({ ...prev, plate: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Blok No
+                <input
+                  placeholder="Örn: A"
+                  value={form.blockNo}
+                  onChange={(event) => setForm((prev) => ({ ...prev, blockNo: event.target.value }))}
+                  required
+                />
+              </label>
+              <label>
+                Daire No
+                <input
+                  placeholder="Örn: 12"
+                  value={form.apartmentNo}
+                  onChange={(event) => setForm((prev) => ({ ...prev, apartmentNo: event.target.value }))}
+                  required
+                />
+              </label>
+            </div>
+            <label>
+              Not
+              <textarea
+                placeholder="Ek açıklama (opsiyonel)"
+                value={form.note}
+                onChange={(event) => setForm((prev) => ({ ...prev, note: event.target.value }))}
+                rows={3}
+              />
+            </label>
+            <div className="confirm-actions">
+              <button type="button" className="ghost-btn" onClick={cancelEditing}>
+                Kapat
+              </button>
+              <button type="submit">{editingResidentId ? 'Güncelle' : 'Kaydet'}</button>
+            </div>
+            {SHOW_MOCK_BUTTON && (
+              <button type="button" onClick={addMockResidents}>
+                10 Sahte Kayıt Ekle
+              </button>
+            )}
+          </form>
+        </div>
+      )}
       {pendingDeleteResidentId && (
         <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Kayıt silme onayı">
           <div className="confirm-modal">
@@ -511,6 +845,67 @@ export function RegisterPage() {
               </button>
               <button type="button" className="danger-btn" onClick={() => removeResident(pendingDeleteResidentId)}>
                 Evet, Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {infoResidentId && selectedResident && (
+        <div className="confirm-overlay" role="dialog" aria-modal="true" aria-label="Kişi hareket bilgisi">
+          <div className="confirm-modal info-modal">
+            <h4>Bilgi - {selectedResident.name} {selectedResident.surname}</h4>
+            <p>Son 5 oturum özeti</p>
+
+            <div className="info-status-card">
+              {activeStaySession ? (
+                <div className="info-status-row">
+                  <strong>Durum: İçeride</strong>
+                  <span>Giriş: {formatDateShort(activeStaySession.entryTime)}</span>
+                </div>
+              ) : latestClosedSession ? (
+                <div className="info-status-row">
+                  <strong>Durum: Dışarıda</strong>
+                  <span>Son kalış: {latestClosedSession.durationMinutes ?? '-'} dk</span>
+                </div>
+              ) : (
+                <div className="info-status-row">
+                  <strong>Durum</strong>
+                  <span>Kayıtlı kalış bilgisi yok</span>
+                </div>
+              )}
+            </div>
+
+            <div className="info-events-list">
+              {recentSessionRows.map((session, index) => {
+                const rowTitle = `${index + 1}. kayıt`
+                return (
+                <div key={session ? session.id : `empty-${index}`} className="info-event-item">
+                  {session ? (
+                    <>
+                      <div className="info-event-row">
+                        <strong>{rowTitle}</strong>
+                        <span>{session.durationMinutes ? `${session.durationMinutes} dk` : 'Devam ediyor'}</span>
+                      </div>
+                      <small>Giriş: {formatDateShort(session.entryTime)}</small>
+                      <small>Çıkış: {session.exitTime ? formatDateShort(session.exitTime) : '-'}</small>
+                    </>
+                  ) : (
+                    <>
+                      <div className="info-event-row">
+                        <strong>{rowTitle}</strong>
+                        <span>-</span>
+                      </div>
+                      <small>Veri yok</small>
+                      <small>-</small>
+                    </>
+                  )}
+                </div>
+              )})}
+            </div>
+
+            <div className="confirm-actions">
+              <button type="button" className="ghost-btn" onClick={() => setInfoResidentId(null)}>
+                Kapat
               </button>
             </div>
           </div>

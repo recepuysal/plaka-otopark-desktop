@@ -67,7 +67,7 @@ export function CamerasPage() {
   }
 
   return (
-    <section>
+    <section className="page-stack">
       <header className="page-header">
         <div>
           <h2>Kamera Ayarları</h2>
@@ -78,50 +78,68 @@ export function CamerasPage() {
       <div className="two-col">
         <form className="card form-grid" onSubmit={onSubmit}>
           <h3>Yeni Kamera Bağlantısı</h3>
-          <select
-            value={form.gate}
-            onChange={(event) => setForm((prev) => ({ ...prev, gate: event.target.value as GateType }))}
-          >
-            <option value="entry">Giriş</option>
-            <option value="exit">Çıkış</option>
-          </select>
+          <label>
+            Kapı Yönü
+            <select
+              value={form.gate}
+              onChange={(event) => setForm((prev) => ({ ...prev, gate: event.target.value as GateType }))}
+            >
+              <option value="entry">Giriş</option>
+              <option value="exit">Çıkış</option>
+            </select>
+          </label>
 
-          <select
-            value={form.type}
-            onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as CameraType }))}
-          >
-            {cameraTypes.map((cameraType) => (
-              <option key={cameraType} value={cameraType}>
-                {cameraType}
-              </option>
-            ))}
-          </select>
+          <label>
+            Kamera Türü
+            <select
+              value={form.type}
+              onChange={(event) => setForm((prev) => ({ ...prev, type: event.target.value as CameraType }))}
+            >
+              {cameraTypes.map((cameraType) => (
+                <option key={cameraType} value={cameraType}>
+                  {cameraType}
+                </option>
+              ))}
+            </select>
+          </label>
 
-          <input
-            placeholder="Kamera Adı"
-            value={form.name}
-            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-            required
-          />
-          <input
-            placeholder="Bağlantı URL / Kanal"
-            value={form.url}
-            onChange={(event) => setForm((prev) => ({ ...prev, url: event.target.value }))}
-            required
-          />
-          <input
-            placeholder="Kullanıcı Adı"
-            value={form.username}
-            onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
-          />
-          <input
-            placeholder="Şifre"
-            type="password"
-            value={form.password}
-            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
-          />
+          <label>
+            Kamera Adı
+            <input
+              placeholder="Örn: Giriş Kuzey Kamera"
+              value={form.name}
+              onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            Bağlantı URL / Kanal
+            <input
+              placeholder="rtsp://... veya kanal bilgisi"
+              value={form.url}
+              onChange={(event) => setForm((prev) => ({ ...prev, url: event.target.value }))}
+              required
+            />
+          </label>
+          <label>
+            Kullanıcı Adı
+            <input
+              placeholder="Opsiyonel"
+              value={form.username}
+              onChange={(event) => setForm((prev) => ({ ...prev, username: event.target.value }))}
+            />
+          </label>
+          <label>
+            Şifre
+            <input
+              placeholder="Opsiyonel"
+              type="password"
+              value={form.password}
+              onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+            />
+          </label>
           <button type="submit">Kamera Kaydet</button>
-          {message && <p className="message">{message}</p>}
+          <p className="message message-slot">{message || '\u00A0'}</p>
         </form>
 
         <section className="card">
@@ -144,7 +162,7 @@ export function CamerasPage() {
                   <td>{camera.name}</td>
                   <td>{camera.url}</td>
                   <td>
-                    <button onClick={() => removeAt(index)} className="danger-btn">
+                    <button type="button" onClick={() => removeAt(index)} className="danger-btn">
                       Sil
                     </button>
                   </td>

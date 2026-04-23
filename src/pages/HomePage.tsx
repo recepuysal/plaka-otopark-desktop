@@ -137,7 +137,7 @@ export function HomePage() {
         : 'Bariyer hazır'
 
   return (
-    <section>
+    <section className="page-stack">
       <div className="barrier-panel barrier-panel-top">
         <span className={`led led-center ${barrierState === 'opening' ? 'opening' : ''} ${barrierState === 'closing' ? 'closing' : ''}`}>
           LED
@@ -152,7 +152,7 @@ export function HomePage() {
           Bariyeri Manuel Kapat
         </button>
       </div>
-      {statusMessage && <p className="status-message">{statusMessage}</p>}
+      <p className="status-message status-message-slot">{statusMessage || '\u00A0'}</p>
       <header className="page-header">
         <div>
           <h2>Anasayfa</h2>
@@ -169,7 +169,7 @@ export function HomePage() {
       </header>
 
       <div className="home-grid">
-        <section className="card">
+        <section className="card data-card">
           <h3>Son 10 Hareket</h3>
           <table>
             <thead>
