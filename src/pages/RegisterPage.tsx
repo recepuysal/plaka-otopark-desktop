@@ -405,6 +405,33 @@ export function RegisterPage() {
     excelInputRef.current?.click()
   }
 
+  function downloadResidentList() {
+    if (residents.length === 0) {
+      setMessage('İndirilecek kayıt bulunamadı.')
+      return
+    }
+
+    const rows = residents.map((resident) => ({
+      Ad: resident.name,
+      Soyad: resident.surname,
+      Telefon: resident.phone,
+      Plaka: resident.plate,
+      Blok: resident.blockNo,
+      Daire: resident.apartmentNo,
+      Not: resident.note,
+      KayitTarihi: resident.createdAt,
+    }))
+
+    const workbook = XLSX.utils.book_new()
+    const worksheet = XLSX.utils.json_to_sheet(rows)
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Kayitlar')
+
+    const now = new Date()
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+    XLSX.writeFile(workbook, `kayit-listesi-${stamp}.xlsx`)
+    setMessage('Kayıt listesi indirildi.')
+  }
+
   async function onExcelFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -580,6 +607,9 @@ export function RegisterPage() {
         <div className="header-actions">
           <button type="button" className="ghost-btn" onClick={openCreateModal}>
             Yeni Kayıt Ekle
+          </button>
+          <button type="button" className="ghost-btn" onClick={downloadResidentList}>
+            Listeyi İndir
           </button>
           <button type="button" className="excel-import-btn" onClick={triggerExcelImport}>
             <span className="excel-import-icon" aria-hidden="true">
