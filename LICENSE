@@ -1,0 +1,19 @@
+PlakaOtopark Desktop
+Copyright (c) 2026 Recep UYSAL. Tüm hakları saklıdır.
+
+Bu yazılım özel mülkiyettedir; açık kaynak veya MIT/GPL vb. bir lisansla
+sunulmamaktadır.
+
+Yazılımın kaynak veya derlenmiş hâllerinin kopyalanması, değiştirilmesi,
+dağıtılması, kiralanması, satılması veya telif hakkı sahibinin önceden verdiği
+yazılı izin olmaksızın herhangi bir şekilde kullanılması yasaktır.
+
+All rights reserved.
+
+This software is proprietary and is not licensed under an open-source
+license. No part of this software may be copied, modified, distributed,
+rented, sublicensed, or sold without prior written permission from the
+copyright holder.
+
+Third-party libraries used by this project remain under their respective
+licenses (see node_modules and package metadata).

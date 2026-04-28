@@ -1,0 +1,53 @@
+{
+  "name": "plaka-otopark-desktop",
+  "version": "2.2.0",
+  "main": "dist-electron/main/index.js",
+  "description": "PlakaOtopark — Türkiye plaka tanıma (Tesseract), çift hat giriş/çıkış, kayıtlı plakada HTTP bariyer sinyali. USB ve IP kamera (MJPEG/snapshot). Electron + React + Vite masaüstü uygulaması.",
+  "author": "Recep UYSAL",
+  "license": "UNLICENSED",
+  "private": true,
+  "debug": {
+    "env": {
+      "VITE_DEV_SERVER_URL": "http://127.0.0.1:7777/"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "icon:generate": "node scripts/generate-icons.mjs",
+    "version:bump": "node scripts/bump-version.mjs",
+    "predev": "npm run version:bump && npm run icon:generate",
+    "prebuild": "npm run version:bump && npm run icon:generate",
+    "pretest": "npm run version:bump && vite build --mode=test",
+    "dev": "vite",
+    "build": "tsc && vite build && electron-builder",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9",
+    "react-router-dom": "^7.14.0",
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.2",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "autoprefixer": "^10.4.20",
+    "electron": "^33.2.0",
+    "electron-builder": "^24.13.3",
+    "png-to-ico": "^3.0.1",
+    "postcss": "^8.4.49",
+    "postcss-import": "^16.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^3.4.15",
+    "typescript": "^5.4.2",
+    "vite": "^5.4.11",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^2.1.5"
+  }
+}
